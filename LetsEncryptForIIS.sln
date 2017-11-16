@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27004.2006
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LetsEncryptForIISClient", "LetsEncryptForIISClient\LetsEncryptForIISClient.csproj", "{6B1C03A8-1125-4DEA-A5FD-E2260399A25B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LetsEncryptForIIS", "LetsEncryptForIIS\LetsEncryptForIIS.csproj", "{F1DCD34D-2AE2-4D63-A31E-302F5D3C54F6}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6B1C03A8-1125-4DEA-A5FD-E2260399A25B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6B1C03A8-1125-4DEA-A5FD-E2260399A25B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6B1C03A8-1125-4DEA-A5FD-E2260399A25B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6B1C03A8-1125-4DEA-A5FD-E2260399A25B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F1DCD34D-2AE2-4D63-A31E-302F5D3C54F6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F1DCD34D-2AE2-4D63-A31E-302F5D3C54F6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F1DCD34D-2AE2-4D63-A31E-302F5D3C54F6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F1DCD34D-2AE2-4D63-A31E-302F5D3C54F6}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {10E3A919-981C-44B1-B6BC-85314CF97C29}
+	EndGlobalSection
+EndGlobal
