@@ -2,9 +2,9 @@
 
 namespace LetsEncryptForIISClient
 {
-    public class Site
+    public class LESite
     {
-        public object PhysicalPath { get; set; }
+        public string PhysicalPath { get; set; }
         public List<string> Hosts { get; set; }
     }
 }
