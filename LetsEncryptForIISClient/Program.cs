@@ -27,7 +27,7 @@ namespace LetsEncryptForIISClient
             using (var client = new AcmeClient(WellKnownServers.LetsEncryptStaging))
             {
 
-                var account = await client.NewRegistraton("mailto:ackava@gmail.com");
+                var account = await client.NewRegistraton("mailto:*********@gmail.com");
 
                 account.Data.Agreement = account.GetTermsOfServiceUri();
                 account = await client.UpdateRegistration(account);
