@@ -125,7 +125,7 @@ namespace LetsEncryptForIISClient
                     {
                         Type = RRType.TXT,
                         TTL = 60,
-                        Name = $"_acme-challenge.{domain}.8ct.co",
+                        Name = $"_acme-challenge.{domain}.d.co",
                         ResourceRecords = challenges.Select(x => new ResourceRecord($"\"{x}\"")).ToList()
                     }
                 });
