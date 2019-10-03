@@ -4,6 +4,8 @@ namespace LetsEncryptForIISClient
 {
     internal class LEServerManager
     {
-        public IEnumerable<LESite> Sites { get; internal set; }
+        // public IEnumerable<LESite> Sites { get; internal set; }
+
+        public string[] Domains { get; set; }
     }
 }

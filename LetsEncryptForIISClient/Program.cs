@@ -1,5 +1,8 @@
-﻿using Certes;
+﻿using Amazon.Route53;
+using Amazon.Route53.Model;
+using Certes;
 using Certes.Acme;
+using Certes.Acme.Resource;
 using Certes.Pkcs;
 using Microsoft.Web.Administration;
 using Newtonsoft.Json;
@@ -26,105 +29,172 @@ namespace LetsEncryptForIISClient
 
         private static async Task RunAsync()
         {
-            using (ServerManager serverManager = new ServerManager()){
-                var s = new LEServerManager();
-
-                s.Sites = serverManager.Sites.Select(x => new LESite {
-                    Hosts = x.Bindings.Where(b=> !string.IsNullOrWhiteSpace(b.Host)).Select(b=>b.Host).ToList(),
-                    PhysicalPath = x.Applications.First(a=>a.Path == "/").VirtualDirectories.FirstOrDefault().PhysicalPath
+            try
+            {
+                await RunAsync(new LEServerManager
+                {
+                    Domains = new[] { "d.com" }
                 });
-
-                await RunAsync(s);
+            }catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                Console.ReadLine();
             }
         }
 
         private static async Task RunAsync(LEServerManager serverManager)
         {
 
+            var client = new AcmeContext(WellKnownServers.LetsEncryptStagingV2);
             
 
-            using (var client = new AcmeClient(WellKnownServers.LetsEncryptStaging))
+            var account = await client.NewAccount("d@d.com", true);
+
+            var order = await client.NewOrder(new[] { "*.d.com", "d.com"});
+
+            var list = new List<string>();
+
+            var challenges = new List<IChallengeContext>();
+
+            foreach(var auth in await order.Authorizations())
             {
+                var dns = await auth.Dns();
 
-                var account = await client.NewRegistraton("mailto:ackava@gmail.com");
+                challenges.Add(dns);
 
-                account.Data.Agreement = account.GetTermsOfServiceUri();
-                account = await client.UpdateRegistration(account);
-
-                List<LESite> approvedSites = await GetApprovedSites(serverManager, client);
-
-                var csr = new CertificationRequestBuilder();
-                csr.AddName("CN", "all.letsenc.800casting.com");
-
-                foreach (var site in approvedSites.SelectMany(a => a.Hosts))
-                {
-                    csr.SubjectAlternativeNames.Add(site);
-                }
-
-                var cert = await client.NewCertificate(csr);
-
-                var pfxBuilder = cert.ToPfx();
-
-                var pfx = pfxBuilder.Build("lets-encrypt-cert", "abcd123");
-                await File.WriteAllBytesAsync("./lets-encrypt-cert.pfx", pfx);
-
-
-
+                var txt = client.AccountKey.DnsTxt(dns.Token);
+                list.Add(txt);
             }
+
+            await UpdateRoutes("d.com", list);
+
+            var tasks = challenges.Select(x => x.Validate()).ToList();
+
+            await Task.WhenAll(tasks);
+
+            var privateKey = KeyFactory.NewKey(KeyAlgorithm.ES256);
+
+            var csrBuilder = await order.CreateCsr(privateKey);
+
+            csrBuilder.AddName("C=CA, ST=State, L=City, O=Dept, CN=d.com");
+            csrBuilder.SubjectAlternativeNames = new List<string> { "*.d.com" };
+
+            await order.Finalize(csrBuilder.Generate());
+
+            var cert = await order.Download();
+            
+           
+            //var cert = await order.Generate(new CsrInfo {
+            //    CountryName = "US",
+            //    State = "Florida",
+            //    Locality = "Fort Pierce",
+            //    Organization = "800 Software Systems",
+            //    OrganizationUnit = "Web",
+            //    CommonName = "all.800casting.com",
+                
+            //}, privateKey);
+
+            var certPem = cert.ToPem();
+
+            var pfxBuilder = cert.ToPfx(privateKey);
+
+            var pfx = pfxBuilder.Build("all cert", "abcd123");
+
+            await System.IO.File.WriteAllBytesAsync("d:\\temp\\a.pfx", pfx);
+            Console.WriteLine("Certificate generated");
+            Console.ReadLine();
+            
 
         }
 
-        private static async Task<List<LESite>> GetApprovedSites(LEServerManager serverManager, AcmeClient client)
+        private static async Task UpdateRoutes(string domain, IEnumerable<string> challenges)
         {
-            List<LESite> approvedSites = new List<LESite>();
-
-            foreach (var site in serverManager.Sites)
+            using (var route53 = new AmazonRoute53Client(
+                new Amazon.Runtime.BasicAWSCredentials("...", "..."),
+                Amazon.RegionEndpoint.USEast1))
             {
-                foreach (var host in site.Hosts)
+                ChangeResourceRecordSetsRequest req = new ChangeResourceRecordSetsRequest
                 {
-                    var auth = await client.NewAuthorization(new AuthorizationIdentifier
+                    HostedZoneId = "...",
+                    ChangeBatch = new ChangeBatch()
+                };
+                req.ChangeBatch.Changes.Add(new Change
+                {
+                    Action = ChangeAction.UPSERT,
+                    ResourceRecordSet = new ResourceRecordSet
                     {
-                        Type = "http-01",
-                        Value = host
-                    });
-
-                    var httpChallengeInfo = auth.Data.Challenges.First(c => c.Type == ChallengeTypes.Http01);
-                    string code = client.ComputeKeyAuthorization(httpChallengeInfo);
-                    string fileName = httpChallengeInfo.Token;
-
-                    var root = site.PhysicalPath;
-
-                    string filePath = $"{root}\\.well-known\\acme-challenge\\{fileName}";
-
-                    FileInfo file = new FileInfo(filePath);
-                    if (!file.Directory.Exists)
-                        file.Directory.Create();
-
-                    System.IO.File.WriteAllText(filePath, code);
-
-                    var a = await client.CompleteChallenge(httpChallengeInfo);
-
-                    var ca = await client.GetAuthorization(a.Location);
-
-                    while (ca.Data.Status == EntityStatus.Pending)
-                    {
-                        await Task.Delay(1000);
-                        ca = await client.GetAuthorization(a.Location);
+                        Type = RRType.TXT,
+                        TTL = 60,
+                        Name = $"_acme-challenge.{domain}.8ct.co",
+                        ResourceRecords = challenges.Select(x => new ResourceRecord($"\"{x}\"")).ToList()
                     }
+                });
+                var rs = await route53.ChangeResourceRecordSetsAsync(req);
 
-                    if (ca.Data.Status == EntityStatus.Valid)
+                do
+                {
+                    await Task.Delay(1000);
+                    var rc = await route53.GetChangeAsync(new GetChangeRequest { Id = rs.ChangeInfo.Id });
+                    if (rc.ChangeInfo.Status == ChangeStatus.INSYNC)
                     {
-                        approvedSites.Add(site);
+                        break;
                     }
-                    else
-                    {
-                        Console.WriteLine(ca.Data.Status);
-                        Console.WriteLine(ca.Raw);
-                    }
-                }
+                } while (true);
             }
 
-            return approvedSites;
         }
+
+        //private static async Task<List<LESite>> GetApprovedSites(LEServerManager serverManager, AcmeClient client)
+        //{
+        //    List<LESite> approvedSites = new List<LESite>();
+
+        //    foreach (var site in serverManager.Sites)
+        //    {
+        //        foreach (var host in site.Hosts)
+        //        {
+        //            var auth = await client.NewAuthorization(new AuthorizationIdentifier
+        //            {
+        //                Type = "http-01",
+        //                Value = host
+        //            });
+
+        //            var httpChallengeInfo = auth.Data.Challenges.First(c => c.Type == ChallengeTypes.Http01);
+        //            string code = client.ComputeKeyAuthorization(httpChallengeInfo);
+        //            string fileName = httpChallengeInfo.Token;
+
+        //            var root = site.PhysicalPath;
+
+        //            string filePath = $"{root}\\.well-known\\acme-challenge\\{fileName}";
+
+        //            FileInfo file = new FileInfo(filePath);
+        //            if (!file.Directory.Exists)
+        //                file.Directory.Create();
+
+        //            System.IO.File.WriteAllText(filePath, code);
+
+        //            var a = await client.CompleteChallenge(httpChallengeInfo);
+
+        //            var ca = await client.GetAuthorization(a.Location);
+
+        //            while (ca.Data.Status == EntityStatus.Pending)
+        //            {
+        //                await Task.Delay(1000);
+        //                ca = await client.GetAuthorization(a.Location);
+        //            }
+
+        //            if (ca.Data.Status == EntityStatus.Valid)
+        //            {
+        //                approvedSites.Add(site);
+        //            }
+        //            else
+        //            {
+        //                Console.WriteLine(ca.Data.Status);
+        //                Console.WriteLine(ca.Raw);
+        //            }
+        //        }
+        //    }
+
+        //    return approvedSites;
+        //}
     }
 }
